@@ -2,9 +2,18 @@
 
 import asyncio
 import websockets
+import aioredis
+
 
 active_connections = set()
 favorite_number_by_user = {}
+
+redis_pool = None
+
+async def queue_task(msg):
+    with (await redis_pool) as conn:
+        await conn.lpush('tasks', msg)
+
 
 
 async def broadcast():
@@ -16,11 +25,10 @@ async def save(msg, websocket):
     try:
         user, favorite = msg.split(':')
         favorite = int(favorite)
-        favorite_number_by_user[user] = favorite
-        await broadcast()
+        await queue_task(msg)
     except ValueError:
         await websocket.send('Could not save, got:' + msg)
-    except Exception:
+    except Exxxception:
         await websocket.send('Wild error appears!')
     return True
 
@@ -57,7 +65,18 @@ async def handler(websocket, path):
     finally:
         active_connections.remove(websocket)
 
-start_server = websockets.serve(handler, '127.0.0.1', 5678)
 
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+async def main():
+    global redis_pool
+    redis_pool = await aioredis.create_redis_pool(
+        'redis://localhost',
+        minsize=5, maxsize=10,
+        loop=loop)
+    start_server = websockets.serve(handler, '127.0.0.1', 5678)
+    asyncio.ensure_future(start_server)
+
+if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
+    task = asyncio.ensure_future(main())
+    loop.run_until_complete(task)
+    loop.run_forever()
