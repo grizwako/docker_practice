@@ -4,7 +4,6 @@ import asyncio
 import websockets
 import aioredis
 
-
 active_connections = set()
 favorite_number_by_user = {}
 
@@ -23,6 +22,21 @@ async def ws_broadcast(message):
         await  ws.send(message)
 
 
+async def get_all_users():
+    with (await redis_pool) as conn:
+        cur = b'0'  # set initial cursor to 0
+        all_keys = set()
+        while cur:
+            cur, keys = await conn.scan(cur, match='user:*')
+            all_keys.update(keys)
+        sorted_keys = sorted(all_keys)
+        vals = await conn.mget(*sorted_keys)
+        return dict(zip(
+            map(lambda x: x.decode('utf-8')[5:], sorted_keys),
+            map(int, vals)
+        ))
+
+
 async def save(msg, websocket):
     try:
         user, favorite = msg.split(':')
@@ -32,7 +46,6 @@ async def save(msg, websocket):
         await websocket.send('Could not save, got:' + msg)
     except Exception:
         await websocket.send('Wild error appears!')
-    return True
 
 
 async def consumer_handler(websocket):
@@ -40,10 +53,14 @@ async def consumer_handler(websocket):
         await save(message, websocket)
 
 
+
 async def producer_handler():
     while True:
         while await sub_channel.wait_message():
-            msg = await sub_channel.get()
+            # cache? preload users, and then apply changes to preloaded dict
+            #        keep sorted invariant?
+            _ = await sub_channel.get()
+            users = await get_all_users()
             await ws_broadcast('Some user got updated')
 
 
@@ -52,8 +69,7 @@ async def handler(websocket, path):
     try:
         tasks = [asyncio.ensure_future(consumer_handler(websocket)),
                  asyncio.ensure_future(producer_handler())]
-        done, pending = await asyncio.wait(
-            tasks,
+        done, pending = await asyncio.wait(tasks,
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:
@@ -68,13 +84,12 @@ async def connect():
         'redis://localhost',
         minsize=5, maxsize=10)
     redis_sub = await aioredis.create_redis('redis://localhost')
-
     sub = await redis_sub.subscribe('user_saved')
     sub_channel = sub[0]
 
+
 async def main():
     await connect()
-
     start_server = websockets.serve(handler, '127.0.0.1', 5678)
     asyncio.ensure_future(start_server)
 
