@@ -22,6 +22,7 @@ async def ws_broadcast(message):
         await  ws.send(message)
 
 
+# sorted by username, sort is case sensitive
 async def get_all_users():
     with (await redis_pool) as conn:
         cur = b'0'  # set initial cursor to 0
@@ -53,6 +54,13 @@ async def consumer_handler(websocket):
         await save(message, websocket)
 
 
+# we could have just leave full redis key and capitalize
+def stringify_users(user_map):
+    return '\n'.join(
+        user + ' has favorite number: ' + str(number)
+        for user, number
+        in user_map.items()
+    )
 
 async def producer_handler():
     while True:
@@ -61,7 +69,7 @@ async def producer_handler():
             #        keep sorted invariant?
             _ = await sub_channel.get()
             users = await get_all_users()
-            await ws_broadcast('Some user got updated')
+            await ws_broadcast(stringify_users(users))
 
 
 async def handler(websocket, path):
