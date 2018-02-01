@@ -40,16 +40,10 @@ async def consumer_handler(websocket):
         await save(message, websocket)
 
 
-async def subscription():
-    while await sub_channel.wait_message():
-        msg = await sub_channel.get()
-        return msg
-
-
-async def producer_handler(websocket):
+async def producer_handler():
     while True:
-        message = await subscription()
-        if message:
+        while await sub_channel.wait_message():
+            msg = await sub_channel.get()
             await ws_broadcast('Some user got updated')
 
 
@@ -57,7 +51,7 @@ async def handler(websocket, path):
     active_connections.add(websocket)
     try:
         tasks = [asyncio.ensure_future(consumer_handler(websocket)),
-                 asyncio.ensure_future(producer_handler(websocket))]
+                 asyncio.ensure_future(producer_handler())]
         done, pending = await asyncio.wait(
             tasks,
             return_when=asyncio.FIRST_COMPLETED,
@@ -77,8 +71,6 @@ async def connect():
 
     sub = await redis_sub.subscribe('user_saved')
     sub_channel = sub[0]
-    asyncio.ensure_future(subscription())
-
 
 async def main():
     await connect()
