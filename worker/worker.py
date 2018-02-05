@@ -9,8 +9,8 @@ publisher = None
 
 async def connect():
     global redis, publisher
-    redis = await aioredis.create_redis('redis://localhost')
-    publisher = await aioredis.create_redis('redis://localhost')
+    redis = await aioredis.create_redis('redis://redis')
+    publisher = await aioredis.create_redis('redis://redis')
 
 
 async def process_tasks():

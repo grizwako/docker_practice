@@ -4,7 +4,6 @@ import asyncio
 import websockets
 import aioredis
 
-print('xxx')
 
 active_websockets = set()
 favorite_number_by_user = {}
@@ -97,16 +96,16 @@ async def ws_handler(websocket, path):
 async def redis_connect():
     global redis_pool, redis_sub, redis_sub_channel
     redis_pool = await aioredis.create_redis_pool(
-        'redis://localhost',
+        'redis://redis',
         minsize=5, maxsize=10)
-    redis_sub = await aioredis.create_redis('redis://localhost')
+    redis_sub = await aioredis.create_redis('redis://redis')
     sub = await redis_sub.subscribe('user_saved')
     redis_sub_channel = sub[0]
 
 
 async def main():
     await redis_connect()
-    ws_server = websockets.serve(ws_handler, '127.0.0.1', 5678)
+    ws_server = websockets.serve(ws_handler, '0.0.0.0', 5678)
     asyncio.ensure_future(ws_server)
 
 

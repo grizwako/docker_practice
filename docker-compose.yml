@@ -12,8 +12,6 @@ services:
         condition: on-failure
     ports:
       - "5678:5678"
-    networks:
-      - webnet
   worker:
     build: ./worker
     deploy:
@@ -34,7 +32,3 @@ services:
       placement:
         constraints: [node.role == manager]
     command: redis-server --appendonly yes
-    networks:
-      - webnet
-networks:
-  webnet:
