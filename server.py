@@ -4,12 +4,12 @@ import asyncio
 import websockets
 import aioredis
 
-active_connections = set()
+active_websockets = set()
 favorite_number_by_user = {}
 
 redis_pool = None
 redis_sub = None
-sub_channel = None
+redis_sub_channel = None
 
 
 async def queue_task(msg):
@@ -17,9 +17,9 @@ async def queue_task(msg):
         await conn.lpush('tasks', msg)
 
 
-async def ws_broadcast(message):
-    for ws in active_connections:
-        await  ws.send(message)
+async def broadcast(message):
+    for websocket in active_websockets:
+        await  websocket.send(message)
 
 
 # sorted by username, sort is case sensitive
@@ -31,6 +31,9 @@ async def get_all_users():
             cur, keys = await conn.scan(cur, match='user:*')
             all_keys.update(keys)
         sorted_keys = sorted(all_keys)
+        # MGET probably blows with some number of keys, check limits in redis
+        # aioredis might also handle it under the hood, probably not
+        # for production batch reads (if there is such a limit)
         vals = await conn.mget(*sorted_keys)
         return dict(zip(
             map(lambda x: x.decode('utf-8')[5:], sorted_keys),
@@ -41,7 +44,7 @@ async def get_all_users():
 async def save(msg, websocket):
     try:
         user, favorite = msg.split(':')
-        favorite = int(favorite)
+        _ = int(favorite)
         await queue_task(msg)
     except ValueError:
         await websocket.send('Could not save, got:' + msg)
@@ -49,12 +52,11 @@ async def save(msg, websocket):
         await websocket.send('Wild error appears!')
 
 
-async def consumer_handler(websocket):
+async def save_handler(websocket):
     async for message in websocket:
         await save(message, websocket)
 
 
-# we could have just leave full redis key and capitalize
 def stringify_users(user_map):
     return '\n'.join(
         user + ' has favorite number: ' + str(number)
@@ -62,47 +64,48 @@ def stringify_users(user_map):
         in user_map.items()
     )
 
-async def producer_handler():
+
+async def notification_handler():
     while True:
-        while await sub_channel.wait_message():
+        while await redis_sub_channel.wait_message():
             # cache? preload users, and then apply changes to preloaded dict
             #        keep sorted invariant?
-            _ = await sub_channel.get()
+            _ = await redis_sub_channel.get()
             users = await get_all_users()
-            await ws_broadcast(stringify_users(users))
+            await broadcast(stringify_users(users))
 
 
-async def handler(websocket, path):
-    active_connections.add(websocket)
+async def ws_handler(websocket, path):
+    active_websockets.add(websocket)
     try:
-        tasks = [asyncio.ensure_future(consumer_handler(websocket)),
-                 asyncio.ensure_future(producer_handler())]
-        done, pending = await asyncio.wait(tasks,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        tasks = [asyncio.ensure_future(save_handler(websocket)),
+                 asyncio.ensure_future(notification_handler())]
+        done, pending = await asyncio.wait(
+            tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
     finally:
-        active_connections.remove(websocket)
+        active_websockets.remove(websocket)
 
 
-async def connect():
-    global redis_pool, redis_sub, sub_channel
+async def redis_connect():
+    global redis_pool, redis_sub, redis_sub_channel
     redis_pool = await aioredis.create_redis_pool(
         'redis://localhost',
         minsize=5, maxsize=10)
     redis_sub = await aioredis.create_redis('redis://localhost')
     sub = await redis_sub.subscribe('user_saved')
-    sub_channel = sub[0]
+    redis_sub_channel = sub[0]
 
 
 async def main():
-    await connect()
-    start_server = websockets.serve(handler, '127.0.0.1', 5678)
-    asyncio.ensure_future(start_server)
+    await redis_connect()
+    ws_server = websockets.serve(ws_handler, '127.0.0.1', 5678)
+    asyncio.ensure_future(ws_server)
+
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    task = asyncio.ensure_future(main())
-    loop.run_until_complete(task)
+    server = asyncio.ensure_future(main())
+    loop.run_until_complete(server)
     loop.run_forever()

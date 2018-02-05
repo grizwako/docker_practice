@@ -1,0 +1,27 @@
+Package for asynchronous saving of users favorite numbers to the redis
+Users can connect via websocket protocol and save favorite number
+Command for saving favorite number is "user name:number"
+    example: "Crazy Camel:42"
+There is also a special command "LIST" which lists all users alphabetically
+    along with their favorite numbers
+Also, after any user successfully saves a favorite number,
+    favorite numbers of all users (like in "LIST" command)
+    will be broadcasted to all active websocket connections
+
+Since this is more of a exploratory code sample, it is not production ready.
+Write order is not guaranteed.
+    Theoretically one user can save 2 different numbers in quick succession.
+    Those writes are pushed to queue and there is no guarantees that processing
+    of tasks put in queue will finish in order they were placed.
+
+Applications should be fairly scalable with some slight modifications.
+Main bottleneck would redis "list" queue.
+In theory, redis PUB/SUB can also be limitation.
+Worker should scale without problems as it is.
+Server would have to handle address:port binding.
+    Also, websocket initialization would have to be load balanced.
+    Once a connection is active, better to leave it on instance it lands on.
+
+Reading of user's favorite numbers might be a problem as it is.
+    Currently done via single redis MGET cmd.
+    Yep, using redis for storage like this is not the best choice.
