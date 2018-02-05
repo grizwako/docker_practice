@@ -4,6 +4,8 @@ import asyncio
 import websockets
 import aioredis
 
+print('xxx')
+
 active_websockets = set()
 favorite_number_by_user = {}
 
