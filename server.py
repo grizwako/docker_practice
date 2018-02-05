@@ -52,9 +52,13 @@ async def save(msg, websocket):
         await websocket.send('Wild error appears!')
 
 
-async def save_handler(websocket):
+async def input_handler(websocket):
     async for message in websocket:
-        await save(message, websocket)
+        if message == 'LIST':
+            users = await get_all_users()
+            await websocket.send(stringify_users(users))
+        else:
+            await save(message, websocket)
 
 
 def stringify_users(user_map):
@@ -78,7 +82,7 @@ async def notification_handler():
 async def ws_handler(websocket, path):
     active_websockets.add(websocket)
     try:
-        tasks = [asyncio.ensure_future(save_handler(websocket)),
+        tasks = [asyncio.ensure_future(input_handler(websocket)),
                  asyncio.ensure_future(notification_handler())]
         done, pending = await asyncio.wait(
             tasks, return_when=asyncio.FIRST_COMPLETED)
