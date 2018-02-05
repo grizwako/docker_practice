@@ -27,7 +27,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - "/home/grizzly/projects/data:/data"
+      - "/var/docker/webso/redis:/data"
     deploy:
       placement:
         constraints: [node.role == manager]
