@@ -1,7 +1,7 @@
 version: '3.0'
 services:
   web:
-    image: grizwako/webso_server:v1
+    image: grizwako/webso_server:v2
     deploy:
       replicas: 1
       resources:
@@ -13,7 +13,7 @@ services:
     ports:
       - "5678:5678"
   worker:
-    image: grizwako/webso_worker:v1
+    image: grizwako/webso_worker:v2
     deploy:
       replicas: 6
       resources:
