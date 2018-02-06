@@ -32,6 +32,8 @@ async def get_all_users():
         while cur:
             cur, keys = await conn.scan(cur, match='user:*')
             all_keys.update(keys)
+        if 0 == len(all_keys):
+            return {}
         sorted_keys = sorted(all_keys)
         # MGET probably blows with some number of keys, check limits in redis
         # aioredis might also handle it under the hood, probably not
