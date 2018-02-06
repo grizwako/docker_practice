@@ -5,12 +5,13 @@ import aioredis
 
 redis = None
 publisher = None
+redis_address = 'redis://redis'
 
 
 async def connect():
     global redis, publisher
-    redis = await aioredis.create_redis('redis://redis')
-    publisher = await aioredis.create_redis('redis://redis')
+    redis = await aioredis.create_redis(redis_address)
+    publisher = await aioredis.create_redis(redis_address)
 
 
 async def process_tasks():

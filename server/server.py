@@ -11,6 +11,7 @@ favorite_number_by_user = {}
 redis_pool = None
 redis_sub = None
 redis_sub_channel = None
+redis_address = 'redis://redis'
 
 
 async def queue_task(msg):
@@ -86,7 +87,7 @@ async def ws_handler(websocket, path):
         tasks = [asyncio.ensure_future(input_handler(websocket)),
                  asyncio.ensure_future(notification_handler())]
         done, pending = await asyncio.wait(
-            tasks, return_when=asyncio.FIRST_COMPLETED)
+            tasks, return_when=asyncio.ALL_COMPLETED)
         for task in pending:
             task.cancel()
     finally:
@@ -96,9 +97,9 @@ async def ws_handler(websocket, path):
 async def redis_connect():
     global redis_pool, redis_sub, redis_sub_channel
     redis_pool = await aioredis.create_redis_pool(
-        'redis://redis',
+        redis_address,
         minsize=5, maxsize=10)
-    redis_sub = await aioredis.create_redis('redis://redis')
+    redis_sub = await aioredis.create_redis(redis_address)
     sub = await redis_sub.subscribe('user_saved')
     redis_sub_channel = sub[0]
 
